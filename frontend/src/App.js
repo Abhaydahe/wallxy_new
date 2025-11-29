@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Briefcase, Users, Star, TrendingUp, Search, Sparkles, MapPin, DollarSign, Clock, Bookmark, Bell, MessageSquare, User, Settings, LogOut, FileText, ArrowRight, Plus, Filter, Building2, CheckCircle2, Clock3, Eye, MoreHorizontal, Wallet, Calendar } from 'lucide-react';
+import { Briefcase, Users, Star, TrendingUp, Search, Sparkles, MapPin, DollarSign, Clock, Bookmark, Bell, MessageSquare, User, Settings, LogOut, FileText, ArrowRight, Plus, Filter, Building2, CheckCircle2, Clock3, Eye, MoreHorizontal, Wallet, Calendar, XCircle, Check } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
@@ -304,6 +304,13 @@ const AuthPage = () => {
 const JobsPage = () => {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("All");
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [experienceFilter, setExperienceFilter] = useState("All");
+  const [salaryFilter, setSalaryFilter] = useState("All");
+
   useEffect(() => { fetchJobs(); }, []);
 
   const fetchJobs = async () => {
@@ -315,48 +322,99 @@ const JobsPage = () => {
 
   const formatSalary = (min, max) => (min && max) ? `₹${(min / 100000).toFixed(1)}L - ₹${(max / 100000).toFixed(1)}L` : 'Negotiable';
 
+  const filteredJobs = jobs.filter(job => {
+    const matchesSearch = job.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          job.company_name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesLocation = job.location.toLowerCase().includes(locationFilter.toLowerCase());
+    const matchesType = typeFilter === "All" || job.job_type === typeFilter;
+    const matchesCategory = categoryFilter === "All" || job.category === categoryFilter;
+    const matchesExperience = experienceFilter === "All" || job.experience_level === experienceFilter;
+    
+    let matchesSalary = true;
+    if (salaryFilter !== "All") {
+      const [minRange, maxRange] = salaryFilter.split('-').map(Number);
+      if (maxRange) {
+         const jobMinLakhs = job.salary_min / 100000;
+         const jobMaxLakhs = job.salary_max / 100000;
+         matchesSalary = (jobMinLakhs <= maxRange && jobMaxLakhs >= minRange);
+      } else {
+         const jobMaxLakhs = job.salary_max / 100000;
+         matchesSalary = jobMaxLakhs >= minRange;
+      }
+    }
+
+    return matchesSearch && matchesLocation && matchesType && matchesCategory && matchesExperience && matchesSalary;
+  });
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="bg-[#00ADB5] py-20 px-4">
+        <div className="max-w-7xl mx-auto text-center space-y-6">
+          <h1 className="text-4xl md:text-5xl font-bold text-white">Find Your Next Job in Architecture, Interior & Construction</h1>
+          <p className="text-white/90 text-lg max-w-2xl mx-auto">Discover opportunities from top companies in the AEC industry</p>
+          <div className="max-w-4xl mx-auto mt-8 bg-white p-2 rounded-xl shadow-lg flex flex-col md:flex-row gap-2">
+            <div className="flex-1 relative flex items-center"><Search className="absolute left-3 w-5 h-5 text-gray-400" /><Input placeholder="Job title, keywords, or company" className="pl-10 border-none shadow-none focus-visible:ring-0 text-base h-12" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+            <div className="hidden md:block w-px bg-gray-200 h-8 self-center"></div>
+            <div className="flex-1 relative flex items-center"><MapPin className="absolute left-3 w-5 h-5 text-gray-400" /><Input placeholder="City or location" className="pl-10 border-none shadow-none focus-visible:ring-0 text-base h-12" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} /></div>
+            <Button className="h-12 px-8 bg-[#00ADB5] hover:bg-[#009DA5] text-white font-semibold text-lg rounded-lg">Search Jobs</Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="flex justify-between items-center mb-8">
-          <div><h1 className="text-3xl font-bold text-[#222831]">Browse Jobs</h1><p className="text-gray-600 mt-2">Discover opportunities in AEC industry</p></div>
+          <h2 className="text-2xl font-bold text-[#222831]">{filteredJobs.length} Jobs Found</h2>
           <Link to="/jobs/post"><Button className="bg-[#00ADB5] hover:bg-[#00ADB5]/90"><Plus className="w-4 h-4 mr-2" />Post a Job</Button></Link>
         </div>
-        {loading ? <div className="text-center py-12">Loading jobs...</div> : jobs.length === 0 ? (
-          <Card><CardContent className="py-12 text-center"><Briefcase className="w-12 h-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">No jobs available yet</p></CardContent></Card>
-        ) : (
-          <div className="grid grid-cols-1 gap-6">
-            {jobs.map((job) => (
-              <Card key={job.id} className="hover:shadow-lg transition-shadow border-2 hover:border-[#00ADB5]">
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <CardTitle className="text-xl mb-2 text-[#222831]"><Link to={`/jobs/${job.id}`} className="hover:text-[#00ADB5] transition-colors">{job.title}</Link></CardTitle>
-                      <p className="text-[#393E46] font-medium">{job.company_name}</p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap gap-2 items-center text-sm text-[#393E46]">
-                      <div className="flex items-center gap-1"><MapPin className="w-4 h-4" /><span>{job.location}</span></div>
-                      <div className="flex items-center gap-1"><Briefcase className="w-4 h-4" /><span>{job.job_type}</span></div>
-                      <div className="flex items-center gap-1"><DollarSign className="w-4 h-4" /><span>{formatSalary(job.salary_min, job.salary_max)}</span></div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="secondary" className="bg-[#EEEEEE] text-[#222831]">{job.category}</Badge>
-                      {job.skills.slice(0, 3).map((skill, index) => (<Badge key={index} variant="outline" className="border-[#00ADB5] text-[#00ADB5]">{skill}</Badge>))}
-                    </div>
-                    <div className="flex items-center justify-between pt-3">
-                      <span className="text-sm text-gray-500">{job.applicants_count} applicants</span>
-                      <Link to={`/jobs/${job.id}`}><Button className="bg-[#00ADB5] hover:bg-[#00ADB5]/90">Apply Now</Button></Link>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          <div className="lg:col-span-1 space-y-6">
+            <Card className="border-none shadow-sm sticky top-24">
+              <CardHeader>
+                <div className="flex justify-between items-center"><CardTitle className="text-lg">Filters</CardTitle><Button variant="ghost" size="sm" className="text-[#00ADB5] hover:text-[#009DA5] h-auto p-0" onClick={() => { setSearchTerm(""); setLocationFilter(""); setTypeFilter("All"); setCategoryFilter("All"); setExperienceFilter("All"); setSalaryFilter("All"); }}>Clear All</Button></div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-2"><Label>Category</Label><Select value={categoryFilter} onValueChange={setCategoryFilter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="All">All Categories</SelectItem><SelectItem value="Architecture">Architecture</SelectItem><SelectItem value="Engineering">Engineering</SelectItem><SelectItem value="Construction">Construction</SelectItem><SelectItem value="Design">Design</SelectItem><SelectItem value="Interior">Interior Design</SelectItem></SelectContent></Select></div>
+                <div className="space-y-2"><Label>Job Type</Label><Select value={typeFilter} onValueChange={setTypeFilter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="All">All Types</SelectItem><SelectItem value="Full-time">Full-time</SelectItem><SelectItem value="Part-time">Part-time</SelectItem><SelectItem value="Contract">Contract</SelectItem><SelectItem value="Internship">Internship</SelectItem><SelectItem value="Freelance">Freelance</SelectItem></SelectContent></Select></div>
+                <div className="space-y-2"><Label>Experience Level</Label><Select value={experienceFilter} onValueChange={setExperienceFilter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="All">Any Experience</SelectItem><SelectItem value="Entry-level">Entry-level (0-2 yrs)</SelectItem><SelectItem value="Mid-level">Mid-level (2-5 yrs)</SelectItem><SelectItem value="Senior">Senior (5-8 yrs)</SelectItem><SelectItem value="Lead">Lead (8+ yrs)</SelectItem></SelectContent></Select></div>
+                <div className="space-y-2"><Label>Salary Range (₹L/year)</Label><Select value={salaryFilter} onValueChange={setSalaryFilter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="All">Any Salary</SelectItem><SelectItem value="0-3">0 - 3 LPA</SelectItem><SelectItem value="3-6">3 - 6 LPA</SelectItem><SelectItem value="6-10">6 - 10 LPA</SelectItem><SelectItem value="10-20">10 - 20 LPA</SelectItem><SelectItem value="20+">20+ LPA</SelectItem></SelectContent></Select></div>
+              </CardContent>
+            </Card>
           </div>
-        )}
+
+          <div className="lg:col-span-3">
+            {loading ? <div className="text-center py-12">Loading jobs...</div> : filteredJobs.length === 0 ? (
+              <Card><CardContent className="py-16 text-center"><Briefcase className="w-16 h-16 mx-auto text-gray-300 mb-4" /><h3 className="text-xl font-semibold text-gray-900">No jobs found</h3><p className="text-gray-500 mt-2">Try adjusting your search or filters</p></CardContent></Card>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {filteredJobs.map((job) => (
+                  <Card key={job.id} className="group hover:shadow-md transition-all duration-200 border border-gray-200 hover:border-[#00ADB5]">
+                    <CardContent className="p-6">
+                      <div className="flex flex-col md:flex-row gap-6">
+                        <div className="w-14 h-14 bg-gray-50 rounded-xl flex items-center justify-center text-xl font-bold text-gray-500 uppercase flex-shrink-0">{job.company_name.charAt(0)}</div>
+                        <div className="flex-1">
+                          <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+                            <div><h3 className="text-xl font-bold text-[#222831] group-hover:text-[#00ADB5] transition-colors"><Link to={`/jobs/${job.id}`}>{job.title}</Link></h3><p className="text-[#393E46] font-medium mt-1">{job.company_name}</p></div>
+                            <Badge variant="secondary" className="w-fit bg-[#00ADB5]/10 text-[#00ADB5] hover:bg-[#00ADB5]/20 border-none">{job.category}</Badge>
+                          </div>
+                          <div className="flex flex-wrap gap-y-2 gap-x-6 mt-4 text-sm text-gray-500">
+                            <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4" /> {job.location}</span>
+                            <span className="flex items-center gap-1.5"><Briefcase className="w-4 h-4" /> {job.job_type}</span>
+                            <span className="flex items-center gap-1.5"><DollarSign className="w-4 h-4" /> {formatSalary(job.salary_min, job.salary_max)}</span>
+                          </div>
+                          <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-100">
+                            <div className="flex gap-2">{job.skills.slice(0, 3).map((skill, idx) => (<span key={idx} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-md">{skill}</span>))}</div>
+                            <div className="flex items-center gap-4"><span className="text-xs text-gray-400">Posted {new Date(job.created_at).toLocaleDateString()}</span><Link to={`/jobs/${job.id}`}><Button className="bg-[#00ADB5] hover:bg-[#009DA5]">Apply Now</Button></Link></div>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -399,14 +457,17 @@ const PostJobPage = () => {
             <div className="space-y-2"><Label>Description</Label><Textarea rows={4} value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} required /></div>
             <div className="space-y-2"><Label>Requirements (one per line)</Label><Textarea rows={4} value={formData.requirements} onChange={(e) => setFormData({ ...formData, requirements: e.target.value })} required /></div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Category</Label><Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Architecture">Architecture</SelectItem><SelectItem value="Engineering">Engineering</SelectItem><SelectItem value="Construction">Construction</SelectItem><SelectItem value="Design">Design</SelectItem></SelectContent></Select></div>
-              <div className="space-y-2"><Label>Job Type</Label><Select value={formData.job_type} onValueChange={(value) => setFormData({ ...formData, job_type: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Full-time">Full-time</SelectItem><SelectItem value="Part-time">Part-time</SelectItem><SelectItem value="Contract">Contract</SelectItem><SelectItem value="Freelance">Freelance</SelectItem></SelectContent></Select></div>
+              <div className="space-y-2"><Label>Category</Label><Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Architecture">Architecture</SelectItem><SelectItem value="Engineering">Engineering</SelectItem><SelectItem value="Construction">Construction</SelectItem><SelectItem value="Design">Design</SelectItem><SelectItem value="Interior">Interior Design</SelectItem></SelectContent></Select></div>
+              <div className="space-y-2"><Label>Job Type</Label><Select value={formData.job_type} onValueChange={(value) => setFormData({ ...formData, job_type: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Full-time">Full-time</SelectItem><SelectItem value="Part-time">Part-time</SelectItem><SelectItem value="Contract">Contract</SelectItem><SelectItem value="Internship">Internship</SelectItem><SelectItem value="Freelance">Freelance</SelectItem></SelectContent></Select></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2"><Label>Experience Level</Label><Select value={formData.experience_level} onValueChange={(value) => setFormData({ ...formData, experience_level: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Entry-level">Entry-level</SelectItem><SelectItem value="Mid-level">Mid-level</SelectItem><SelectItem value="Senior">Senior</SelectItem><SelectItem value="Lead">Lead</SelectItem></SelectContent></Select></div>
+              <div className="space-y-2"><Label>Location</Label><Input value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} required /></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Min Salary (₹)</Label><Input type="number" value={formData.salary_min} onChange={(e) => setFormData({ ...formData, salary_min: e.target.value })} required /></div>
               <div className="space-y-2"><Label>Max Salary (₹)</Label><Input type="number" value={formData.salary_max} onChange={(e) => setFormData({ ...formData, salary_max: e.target.value })} required /></div>
             </div>
-            <div className="space-y-2"><Label>Location</Label><Input value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} required /></div>
             <div className="space-y-2"><Label>Skills (comma separated)</Label><Input value={formData.skills} onChange={(e) => setFormData({ ...formData, skills: e.target.value })} required /></div>
             <Button type="submit" className="w-full bg-[#00ADB5] hover:bg-[#00ADB5]/90" disabled={loading}>{loading ? 'Posting...' : 'Post Job'}</Button>
           </form>
@@ -453,37 +514,61 @@ const JobDetailPage = () => {
   if (!job) return <div className="min-h-screen flex items-center justify-center">Job not found</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-3xl text-[#222831]">{job.title}</CardTitle>
-            <p className="text-xl text-[#393E46] mt-2">{job.company_name}</p>
-            <div className="flex flex-wrap gap-3 mt-4"><Badge className="bg-[#00ADB5]">{job.job_type}</Badge><Badge variant="outline">{job.experience_level}</Badge><Badge variant="outline">{job.category}</Badge></div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div><h3 className="text-lg font-semibold mb-2">Description</h3><p className="text-gray-700 whitespace-pre-line">{job.description}</p></div>
-            <div><h3 className="text-lg font-semibold mb-2">Requirements</h3><ul className="list-disc list-inside space-y-1">{job.requirements.map((req, idx) => (<li key={idx} className="text-gray-700">{req}</li>))}</ul></div>
-            <div><h3 className="text-lg font-semibold mb-2">Skills Required</h3><div className="flex flex-wrap gap-2">{job.skills.map((skill, idx) => (<Badge key={idx} variant="outline" className="border-[#00ADB5] text-[#00ADB5]">{skill}</Badge>))}</div></div>
-            <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
-              <div><p className="text-sm text-gray-600">Location</p><p className="font-medium">{job.location}</p></div>
-              <div><p className="text-sm text-gray-600">Salary Range</p><p className="font-medium">₹{(job.salary_min / 100000).toFixed(1)}L - ₹{(job.salary_max / 100000).toFixed(1)}L</p></div>
-            </div>
-            {user && user.user_type !== 'employer' && user.user_type !== 'client' && (
-              <form onSubmit={handleApply} className="space-y-4">
-                <div><Label>Cover Letter</Label><Textarea placeholder="Tell the employer why you're a great fit..." rows={6} value={coverLetter} onChange={(e) => setCoverLetter(e.target.value)} required /></div>
-                <Button type="submit" className="w-full bg-[#00ADB5] hover:bg-[#00ADB5]/90" disabled={applying}>{applying ? 'Submitting...' : 'Submit Application'}</Button>
-              </form>
-            )}
-          </CardContent>
-        </Card>
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <Link to="/jobs" className="inline-flex items-center text-gray-500 hover:text-[#00ADB5] mb-6"><ArrowRight className="w-4 h-4 mr-2 rotate-180" /> Back to Jobs</Link>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-6">
+            <Card className="border-none shadow-sm">
+              <CardContent className="p-8">
+                <div className="flex justify-between items-start">
+                  <div><h1 className="text-3xl font-bold text-[#222831]">{job.title}</h1><div className="flex items-center gap-2 text-lg text-gray-600 mt-2"><Building2 className="w-5 h-5" /><span className="font-medium">{job.company_name}</span></div></div>
+                  <button className="text-gray-400 hover:text-[#00ADB5]"><Bookmark className="w-6 h-6" /></button>
+                </div>
+                <div className="flex flex-wrap gap-6 mt-6 text-gray-500 text-sm border-b border-gray-100 pb-6">
+                  <div className="flex items-center gap-2"><MapPin className="w-4 h-4" /> {job.location}</div>
+                  <div className="flex items-center gap-2"><Briefcase className="w-4 h-4" /> {job.job_type}</div>
+                  <div className="flex items-center gap-2"><Clock className="w-4 h-4" /> {job.experience_level}</div>
+                  <div className="flex items-center gap-2"><Calendar className="w-4 h-4" /> Posted {new Date(job.created_at).toLocaleDateString()}</div>
+                  <div className="flex items-center gap-2"><Eye className="w-4 h-4" /> {job.views || 0} views</div>
+                </div>
+                <div className="mt-6"><p className="text-2xl font-bold text-[#00ADB5]">₹{(job.salary_min / 100000).toFixed(1)}L - ₹{(job.salary_max / 100000).toFixed(1)}L <span className="text-base font-normal text-gray-500 ml-2">per year</span></p></div>
+                <div className="flex flex-wrap gap-2 mt-6"><Badge className="bg-[#222831] hover:bg-[#393E46]">{job.category}</Badge>{job.skills.map((skill, idx) => (<Badge key={idx} variant="outline" className="text-[#00ADB5] border-[#00ADB5] bg-[#00ADB5]/5">{skill}</Badge>))}</div>
+                <div className="mt-10 space-y-6">
+                  <div><h3 className="text-xl font-bold text-[#222831] mb-3">Job Description</h3><p className="text-gray-600 leading-relaxed whitespace-pre-line">{job.description}</p></div>
+                  <div><h3 className="text-xl font-bold text-[#222831] mb-3">Key Responsibilities & Requirements</h3><ul className="space-y-2">{job.requirements.map((req, idx) => (<li key={idx} className="flex items-start gap-3 text-gray-600"><CheckCircle2 className="w-5 h-5 text-[#00ADB5] mt-0.5 flex-shrink-0" /><span>{req}</span></li>))}</ul></div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-6">
+            <Card className="border-none shadow-sm sticky top-24">
+              <CardContent className="p-6 space-y-6">
+                {user && user.user_type !== 'employer' && user.user_type !== 'client' ? (
+                  <form onSubmit={handleApply} className="space-y-4"><Button type="submit" className="w-full h-12 text-lg bg-[#00ADB5] hover:bg-[#009DA5] font-bold" disabled={applying}>{applying ? 'Submitting...' : 'Apply Now'}</Button><Textarea placeholder="Write a short cover letter..." className="resize-none" rows={4} value={coverLetter} onChange={(e) => setCoverLetter(e.target.value)} required /></form>
+                ) : (<Button className="w-full h-12 text-lg bg-gray-200 text-gray-500 hover:bg-gray-200 cursor-not-allowed">Login as Job Seeker to Apply</Button>)}
+                <div className="space-y-4 pt-6 border-t border-gray-100">
+                  <div className="flex justify-between items-center"><span className="text-gray-600">Applicants</span><span className="font-bold text-[#222831]">{job.applicants_count}</span></div>
+                  <div className="flex justify-between items-center"><span className="text-gray-600">Views</span><span className="font-bold text-[#222831]">{job.views}</span></div>
+                  <div className="flex justify-between items-center"><span className="text-gray-600">Status</span><Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-none">Active</Badge></div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-none shadow-sm">
+              <CardHeader><CardTitle className="text-lg">About {job.company_name}</CardTitle></CardHeader>
+              <CardContent><p className="text-gray-600 text-sm leading-relaxed">{job.company_name} is a leading firm in the {job.category} industry, known for delivering excellence and innovation.</p><div className="mt-4 pt-4 border-t border-gray-100"><Button variant="link" className="text-[#00ADB5] p-0 h-auto">View Company Profile</Button></div></CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
 // ==========================================
-// 8. POST PROJECT PAGE (NEW)
+// 8. POST PROJECT PAGE
 // ==========================================
 const PostProjectPage = () => {
   const { user } = useAuth();
@@ -533,11 +618,17 @@ const PostProjectPage = () => {
 };
 
 // ==========================================
-// 9. PROJECTS PAGE
+// 9. PROJECTS PAGE (REDESIGNED)
 // ==========================================
 const ProjectsPage = () => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [budgetTypeFilter, setBudgetTypeFilter] = useState("All");
+  const [durationFilter, setDurationFilter] = useState("All");
+  const navigate = useNavigate();
+
   useEffect(() => { fetchProjects(); }, []);
 
   const fetchProjects = async () => {
@@ -547,36 +638,154 @@ const ProjectsPage = () => {
     } catch (error) { toast.error('Failed to fetch projects'); } finally { setLoading(false); }
   };
 
+  const filteredProjects = projects.filter(project => {
+    const matchesSearch = project.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          project.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = categoryFilter === "All" || project.category === categoryFilter;
+    const matchesBudgetType = budgetTypeFilter === "All" || project.budget_type === budgetTypeFilter;
+    const matchesDuration = durationFilter === "All" || project.duration === durationFilter;
+
+    return matchesSearch && matchesCategory && matchesBudgetType && matchesDuration;
+  });
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="bg-[#00ADB5] py-20 px-4">
+        <div className="max-w-7xl mx-auto text-center space-y-6">
+          <h1 className="text-4xl md:text-5xl font-bold text-white">Find Exciting Freelance Projects</h1>
+          <p className="text-white/90 text-lg max-w-2xl mx-auto">Work on amazing architectural and engineering projects from top clients</p>
+          <div className="max-w-3xl mx-auto mt-8 bg-white p-2 rounded-xl shadow-lg flex flex-col md:flex-row gap-2">
+            <div className="flex-1 relative flex items-center"><Search className="absolute left-3 w-5 h-5 text-gray-400" /><Input placeholder="Search projects by title or keywords..." className="pl-10 border-none shadow-none focus-visible:ring-0 text-base h-12" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+            <Button className="h-12 px-8 bg-[#00ADB5] hover:bg-[#009DA5] text-white font-semibold text-lg rounded-lg">Search</Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="flex justify-between items-center mb-8">
-          <div><h1 className="text-3xl font-bold text-[#222831]">Browse Projects</h1><p className="text-gray-600 mt-2">Find freelance opportunities</p></div>
+          <h2 className="text-2xl font-bold text-[#222831]">{filteredProjects.length} Projects Available</h2>
           <Link to="/projects/post"><Button className="bg-[#00ADB5] hover:bg-[#00ADB5]/90"><Plus className="w-4 h-4 mr-2" />Post a Project</Button></Link>
         </div>
-        {loading ? <div className="text-center py-12">Loading projects...</div> : projects.length === 0 ? (
-          <Card><CardContent className="py-12 text-center"><FileText className="w-12 h-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">No projects available yet</p></CardContent></Card>
-        ) : (
-          <div className="grid grid-cols-1 gap-6">
-            {projects.map((project) => (
-              <Card key={project.id} className="hover:shadow-lg transition-shadow border-2 hover:border-[#00ADB5]">
-                <CardHeader><CardTitle className="text-xl text-[#222831]">{project.title}</CardTitle></CardHeader>
-                <CardContent>
-                  <p className="text-gray-700 mb-4">{project.description.substring(0, 200)}...</p>
-                  <div className="flex flex-wrap gap-2 mb-4"><Badge className="bg-[#00ADB5]">{project.category}</Badge><Badge variant="outline">{project.budget_type}</Badge><Badge variant="outline">{project.duration}</Badge></div>
-                  <div className="flex items-center justify-between"><span className="text-sm text-gray-500">₹{(project.budget_min / 1000).toFixed(0)}k - ₹{(project.budget_max / 1000).toFixed(0)}k</span><span className="text-sm text-gray-500">{project.proposals_count} proposals</span></div>
-                </CardContent>
-              </Card>
-            ))}
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          <div className="lg:col-span-1 space-y-6">
+            <Card className="border-none shadow-sm sticky top-24">
+              <CardHeader>
+                <div className="flex justify-between items-center"><CardTitle className="text-lg">Filters</CardTitle><Button variant="ghost" size="sm" className="text-[#00ADB5] hover:text-[#009DA5] h-auto p-0" onClick={() => { setSearchTerm(""); setCategoryFilter("All"); setBudgetTypeFilter("All"); setDurationFilter("All"); }}>Clear All</Button></div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-2"><Label>Category</Label><Select value={categoryFilter} onValueChange={setCategoryFilter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="All">All Categories</SelectItem><SelectItem value="Architecture">Architecture</SelectItem><SelectItem value="Engineering">Engineering</SelectItem><SelectItem value="Interior Design">Interior Design</SelectItem><SelectItem value="3D Modeling">3D Modeling</SelectItem></SelectContent></Select></div>
+                <div className="space-y-2"><Label>Budget Type</Label><Select value={budgetTypeFilter} onValueChange={setBudgetTypeFilter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="All">Any Type</SelectItem><SelectItem value="Fixed">Fixed Price</SelectItem><SelectItem value="Hourly">Hourly Rate</SelectItem></SelectContent></Select></div>
+                <div className="space-y-2"><Label>Duration</Label><Select value={durationFilter} onValueChange={setDurationFilter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="All">Any Duration</SelectItem><SelectItem value="< 1 month">&lt; 1 month</SelectItem><SelectItem value="1-3 months">1-3 months</SelectItem><SelectItem value="3-6 months">3-6 months</SelectItem><SelectItem value="> 6 months">&gt; 6 months</SelectItem></SelectContent></Select></div>
+              </CardContent>
+            </Card>
           </div>
-        )}
+
+          <div className="lg:col-span-3">
+            {loading ? <div className="text-center py-12">Loading projects...</div> : filteredProjects.length === 0 ? (
+              <Card><CardContent className="py-16 text-center"><FileText className="w-16 h-16 mx-auto text-gray-300 mb-4" /><h3 className="text-xl font-semibold text-gray-900">No projects found</h3><p className="text-gray-500 mt-2">Try adjusting your search or filters</p></CardContent></Card>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {filteredProjects.map((project) => (
+                  <Card key={project.id} className="group hover:shadow-md transition-all duration-200 border border-gray-200 hover:border-[#00ADB5] cursor-pointer" onClick={() => navigate(`/projects/${project.id}`)}>
+                    <CardContent className="p-6">
+                      <div className="flex flex-col gap-4">
+                        <div className="flex justify-between items-start">
+                          <div><h3 className="text-xl font-bold text-[#222831] group-hover:text-[#00ADB5] transition-colors">{project.title}</h3><div className="flex items-center gap-2 mt-2 text-sm text-gray-500"><Clock className="w-4 h-4" /><span>Posted {new Date(project.created_at).toLocaleDateString()}</span><span className="mx-1">•</span><span>{project.proposals_count} Proposals</span></div></div>
+                          <Badge variant="secondary" className="bg-[#00ADB5]/10 text-[#00ADB5] hover:bg-[#00ADB5]/20 border-none">{project.budget_type}</Badge>
+                        </div>
+                        <p className="text-gray-600 line-clamp-2 text-sm">{project.description}</p>
+                        <div className="flex items-center gap-6 text-sm font-medium text-gray-700 pt-2">
+                          <div className="flex items-center gap-1.5"><Wallet className="w-4 h-4 text-[#00ADB5]" /><span>₹{project.budget_min} - ₹{project.budget_max}</span></div>
+                          <div className="flex items-center gap-1.5"><Clock3 className="w-4 h-4 text-[#00ADB5]" /><span>{project.duration}</span></div>
+                          <div className="flex items-center gap-1.5"><Building2 className="w-4 h-4 text-[#00ADB5]" /><span>{project.category}</span></div>
+                        </div>
+                        <div className="flex justify-between items-center mt-2 pt-4 border-t border-gray-100">
+                           <div className="flex gap-2">{project.skills && project.skills.slice(0, 3).map((skill, idx) => (<span key={idx} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-md">{skill}</span>))}</div>
+                          <Button variant="ghost" className="text-[#00ADB5] hover:text-[#009DA5] hover:bg-[#00ADB5]/10">View Details <ArrowRight className="w-4 h-4 ml-2" /></Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
 // ==========================================
-// 10. JOB SEEKER DASHBOARD
+// 10. PROJECT DETAIL PAGE (NEW)
+// ==========================================
+const ProjectDetailPage = () => {
+  const [project, setProject] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [formData, setFormData] = useState({ cover_letter: '', proposed_budget: '', delivery_time: '' });
+  const { user } = useAuth();
+  const projectId = window.location.pathname.split('/').pop();
+  const navigate = useNavigate();
+
+  useEffect(() => { fetchProject(); }, [projectId]);
+
+  const fetchProject = async () => {
+    try {
+      const response = await axios.get(`${API}/projects/${projectId}`);
+      setProject(response.data);
+    } catch (error) { toast.error('Failed to fetch project'); } finally { setLoading(false); }
+  };
+
+  const handleSubmitProposal = async (e) => {
+    e.preventDefault();
+    if (!user) { toast.error('Please login to send a proposal'); navigate('/auth'); return; }
+    setSubmitting(true);
+    try {
+      await axios.post(`${API}/proposals`, { project_id: projectId, ...formData, proposed_budget: parseFloat(formData.proposed_budget) });
+      toast.success('Proposal sent successfully');
+      navigate('/projects');
+    } catch (error) { toast.error('Failed to send proposal'); } finally { setSubmitting(false); }
+  };
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (!project) return <div className="min-h-screen flex items-center justify-center">Project not found</div>;
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <Link to="/projects" className="inline-flex items-center text-gray-500 hover:text-[#00ADB5] mb-6"><ArrowRight className="w-4 h-4 mr-2 rotate-180" /> Back to Projects</Link>
+        <Card>
+          <CardHeader><CardTitle className="text-3xl">{project.title}</CardTitle><div className="flex gap-2 mt-2"><Badge>{project.category}</Badge><Badge variant="outline">{project.budget_type}</Badge></div></CardHeader>
+          <CardContent className="space-y-6">
+            <div><h3 className="font-bold mb-2">Description</h3><p className="text-gray-700 whitespace-pre-line">{project.description}</p></div>
+            <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded"><div><p className="text-sm text-gray-500">Budget</p><p className="font-medium">₹{project.budget_min} - ₹{project.budget_max}</p></div><div><p className="text-sm text-gray-500">Duration</p><p className="font-medium">{project.duration}</p></div></div>
+            
+            {user && user.user_type === 'freelancer' ? (
+              <div className="border-t pt-6">
+                <h3 className="font-bold text-xl mb-4">Send Proposal</h3>
+                <form onSubmit={handleSubmitProposal} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2"><Label>Your Bid (₹)</Label><Input type="number" value={formData.proposed_budget} onChange={e => setFormData({...formData, proposed_budget: e.target.value})} required /></div>
+                    <div className="space-y-2"><Label>Delivery Time</Label><Input placeholder="e.g. 2 weeks" value={formData.delivery_time} onChange={e => setFormData({...formData, delivery_time: e.target.value})} required /></div>
+                  </div>
+                  <div className="space-y-2"><Label>Cover Letter</Label><Textarea rows={4} placeholder="Describe your approach..." value={formData.cover_letter} onChange={e => setFormData({...formData, cover_letter: e.target.value})} required /></div>
+                  <Button type="submit" className="w-full bg-[#00ADB5]" disabled={submitting}>{submitting ? 'Sending...' : 'Send Proposal'}</Button>
+                </form>
+              </div>
+            ) : (
+               !user ? <Button className="w-full bg-gray-200 text-gray-500" onClick={() => navigate('/auth')}>Login as Freelancer to Bid</Button> : null
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
+// 11. JOB SEEKER DASHBOARD
 // ==========================================
 const JobSeekerDashboard = ({ user, applications, jobs }) => {
   const getStatusColor = (status) => {
@@ -650,18 +859,18 @@ const JobSeekerDashboard = ({ user, applications, jobs }) => {
 };
 
 // ==========================================
-// 11. EMPLOYER DASHBOARD
+// 12. EMPLOYER DASHBOARD
 // ==========================================
-const EmployerDashboard = ({ user, jobs }) => {
+const EmployerDashboard = ({ user, jobs, applications, onUpdateStatus }) => {
   const totalJobs = jobs.length;
-  const totalApplicants = jobs.reduce((acc, job) => acc + (job.applicants_count || 0), 0);
+  const totalApplicants = applications.length; 
   const totalViews = jobs.reduce((acc, job) => acc + (job.views || 0), 0);
 
   const stats = [
     { title: "Active Jobs", value: totalJobs, icon: Briefcase, color: "text-blue-600" },
     { title: "Total Applicants", value: totalApplicants, icon: Users, color: "text-purple-600" },
     { title: "Total Views", value: totalViews, icon: Eye, color: "text-orange-600" },
-    { title: "Hired", value: 0, icon: CheckCircle2, color: "text-green-600" },
+    { title: "Hired", value: applications.filter(a => a.status === 'accepted').length, icon: CheckCircle2, color: "text-green-600" },
   ];
 
   return (
@@ -680,7 +889,49 @@ const EmployerDashboard = ({ user, jobs }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
           <Card className="border shadow-sm">
-            <CardHeader><CardTitle>Your Active Jobs</CardTitle><CardDescription>Overview of your job postings performance</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Recent Applications</CardTitle><CardDescription>Review and manage candidates</CardDescription></CardHeader>
+            <CardContent>
+              {applications.length === 0 ? (
+                <div className="text-center py-12"><Users className="w-12 h-12 mx-auto text-gray-300 mb-3" /><p className="text-gray-500">No applications received yet</p></div>
+              ) : (
+                <div className="space-y-4">
+                  {applications.map((app) => {
+                    const job = jobs.find(j => j.id === app.job_id);
+                    return (
+                      <div key={app.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center text-purple-600 font-bold">
+                            {app.applicant_id.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-medium text-[#222831]">Applicant ID: {app.applicant_id.substring(0, 8)}</p>
+                            <p className="text-sm text-gray-500">Applied for: <span className="font-medium text-[#00ADB5]">{job?.title || 'Unknown Job'}</span></p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {app.status === 'pending' ? (
+                            <>
+                              <Button size="sm" variant="outline" className="text-green-600 border-green-600 hover:bg-green-50" onClick={() => onUpdateStatus(app.id, 'accepted')}>
+                                <Check className="w-4 h-4 mr-1" /> Accept
+                              </Button>
+                              <Button size="sm" variant="outline" className="text-red-600 border-red-600 hover:bg-red-50" onClick={() => onUpdateStatus(app.id, 'rejected')}>
+                                <XCircle className="w-4 h-4 mr-1" /> Reject
+                              </Button>
+                            </>
+                          ) : (
+                            <Badge variant="secondary" className="capitalize">{app.status}</Badge>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border shadow-sm">
+            <CardHeader><CardTitle>Your Active Jobs</CardTitle></CardHeader>
             <CardContent>
               {jobs.length === 0 ? (
                 <div className="text-center py-12"><Briefcase className="w-12 h-12 mx-auto text-gray-300 mb-3" /><p className="text-gray-500">You haven't posted any jobs yet</p><Link to="/jobs/post" className="text-[#00ADB5] hover:underline text-sm mt-2 inline-block">Post your first job</Link></div>
@@ -695,12 +946,9 @@ const EmployerDashboard = ({ user, jobs }) => {
                           <p className="text-sm text-gray-500 flex items-center gap-1"><Clock3 className="w-3 h-3" /> Posted {new Date(job.created_at).toLocaleDateString()}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right hidden md:block">
-                          <p className="text-sm font-medium">{job.applicants_count} Applicants</p>
-                          <p className="text-xs text-gray-500">{job.views || 0} Views</p>
-                        </div>
-                        <Button variant="ghost" size="icon"><MoreHorizontal className="w-4 h-4" /></Button>
+                      <div className="text-right">
+                        <p className="text-sm font-medium">{job.applicants_count} Applicants</p>
+                        <p className="text-xs text-gray-500">{job.views || 0} Views</p>
                       </div>
                     </div>
                   ))}
@@ -730,7 +978,7 @@ const EmployerDashboard = ({ user, jobs }) => {
 };
 
 // ==========================================
-// 12. FREELANCER DASHBOARD
+// 13. FREELANCER DASHBOARD
 // ==========================================
 const FreelancerDashboard = ({ user, proposals, projects }) => {
   const activeProposals = proposals.filter(p => p.status === 'pending').length;
@@ -811,11 +1059,11 @@ const FreelancerDashboard = ({ user, proposals, projects }) => {
 };
 
 // ==========================================
-// 13. CLIENT DASHBOARD (NEW)
+// 14. CLIENT DASHBOARD (NEW)
 // ==========================================
-const ClientDashboard = ({ user, projects }) => {
+const ClientDashboard = ({ user, projects, proposals, onUpdateStatus }) => {
   const totalProjects = projects.length;
-  const totalProposals = projects.reduce((acc, p) => acc + (p.proposals_count || 0), 0);
+  const totalProposals = proposals.length; 
   const totalViews = projects.reduce((acc, p) => acc + (p.views || 0), 0);
 
   const stats = [
@@ -841,7 +1089,50 @@ const ClientDashboard = ({ user, projects }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
           <Card className="border shadow-sm">
-            <CardHeader><CardTitle>Your Active Projects</CardTitle><CardDescription>Overview of your project postings</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Received Proposals</CardTitle><CardDescription>Review incoming bids from freelancers</CardDescription></CardHeader>
+            <CardContent>
+              {proposals.length === 0 ? (
+                <div className="text-center py-12"><FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" /><p className="text-gray-500">No proposals received yet</p></div>
+              ) : (
+                <div className="space-y-4">
+                  {proposals.map((prop) => {
+                    const project = projects.find(p => p.id === prop.project_id);
+                    return (
+                      <div key={prop.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center text-purple-600 font-bold">
+                            {prop.freelancer_id.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-medium text-[#222831]">Bid: ₹{prop.proposed_budget}</p>
+                            <p className="text-sm text-gray-500">For: <span className="font-medium text-[#00ADB5]">{project?.title || 'Unknown Project'}</span></p>
+                            <p className="text-xs text-gray-400">Time: {prop.delivery_time}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {prop.status === 'pending' ? (
+                            <>
+                              <Button size="sm" variant="outline" className="text-green-600 border-green-600 hover:bg-green-50" onClick={() => onUpdateStatus(prop.id, 'accepted')}>
+                                <Check className="w-4 h-4 mr-1" /> Accept
+                              </Button>
+                              <Button size="sm" variant="outline" className="text-red-600 border-red-600 hover:bg-red-50" onClick={() => onUpdateStatus(prop.id, 'rejected')}>
+                                <XCircle className="w-4 h-4 mr-1" /> Reject
+                              </Button>
+                            </>
+                          ) : (
+                            <Badge variant="secondary" className="capitalize">{prop.status}</Badge>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border shadow-sm">
+            <CardHeader><CardTitle>Your Active Projects</CardTitle></CardHeader>
             <CardContent>
               {projects.length === 0 ? (
                 <div className="text-center py-12"><Briefcase className="w-12 h-12 mx-auto text-gray-300 mb-3" /><p className="text-gray-500">You haven't posted any projects yet</p><Link to="/projects/post" className="text-[#00ADB5] hover:underline text-sm mt-2 inline-block">Post your first project</Link></div>
@@ -856,12 +1147,9 @@ const ClientDashboard = ({ user, projects }) => {
                           <p className="text-sm text-gray-500 flex items-center gap-1"><Clock3 className="w-3 h-3" /> Posted {new Date(proj.created_at).toLocaleDateString()}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right hidden md:block">
-                          <p className="text-sm font-medium">{proj.proposals_count} Proposals</p>
-                          <p className="text-xs text-gray-500">{proj.views || 0} Views</p>
-                        </div>
-                        <Button variant="ghost" size="icon"><MoreHorizontal className="w-4 h-4" /></Button>
+                      <div className="text-right">
+                        <p className="text-sm font-medium">{proj.proposals_count} Proposals</p>
+                        <p className="text-xs text-gray-500">{proj.views || 0} Views</p>
                       </div>
                     </div>
                   ))}
@@ -891,11 +1179,11 @@ const ClientDashboard = ({ user, projects }) => {
 };
 
 // ==========================================
-// 14. DASHBOARD PAGE WRAPPER
+// 15. DASHBOARD PAGE WRAPPER
 // ==========================================
 const DashboardPage = () => {
   const { user } = useAuth();
-  const [stats, setStats] = useState({ applications: [], proposals: [], jobs: [], myJobs: [], projects: [], myProjects: [] });
+  const [stats, setStats] = useState({ applications: [], proposals: [], jobs: [], myJobs: [], projects: [], myProjects: [], incomingProposals: [] });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { if (user) fetchStats(); }, [user]);
@@ -912,7 +1200,11 @@ const DashboardPage = () => {
       } else if (user.user_type === 'employer') {
         const jobsRes = await axios.get(`${API}/jobs`);
         const myPostedJobs = jobsRes.data.filter(job => job.employer_id === user.id);
-        setStats({ ...stats, myJobs: myPostedJobs });
+        const appsPromises = myPostedJobs.map(job => axios.get(`${API}/applications/job/${job.id}`));
+        const appsResponses = await Promise.all(appsPromises);
+        const allApplications = appsResponses.flatMap(res => res.data);
+        setStats({ ...stats, myJobs: myPostedJobs, applications: allApplications });
+
       } else if (user.user_type === 'freelancer') {
         const [propsRes, projectsRes] = await Promise.all([
           axios.get(`${API}/proposals/my`),
@@ -922,9 +1214,31 @@ const DashboardPage = () => {
       } else if (user.user_type === 'client') {
         const projectsRes = await axios.get(`${API}/projects`);
         const myPostedProjects = projectsRes.data.filter(proj => proj.client_id === user.id);
-        setStats({ ...stats, myProjects: myPostedProjects });
+        
+        // NEW: Fetch proposals for client's projects
+        const proposalPromises = myPostedProjects.map(p => axios.get(`${API}/proposals/project/${p.id}`));
+        const proposalResponses = await Promise.all(proposalPromises);
+        const allProposals = proposalResponses.flatMap(res => res.data);
+
+        setStats({ ...stats, myProjects: myPostedProjects, incomingProposals: allProposals });
       }
     } catch (error) { console.error('Failed to fetch stats:', error); } finally { setLoading(false); }
+  };
+
+  const handleUpdateAppStatus = async (appId, newStatus) => {
+    try {
+      await axios.put(`${API}/applications/${appId}`, { status: newStatus });
+      toast.success(`Application ${newStatus}`);
+      fetchStats();
+    } catch (error) { toast.error("Failed to update status"); }
+  };
+
+  const handleUpdatePropStatus = async (propId, newStatus) => {
+    try {
+      await axios.put(`${API}/proposals/${propId}`, { status: newStatus });
+      toast.success(`Proposal ${newStatus}`);
+      fetchStats();
+    } catch (error) { toast.error("Failed to update status"); }
   };
 
   if (!user) return <Navigate to="/auth" />;
@@ -944,7 +1258,7 @@ const DashboardPage = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <EmployerDashboard user={user} jobs={stats.myJobs} />
+          <EmployerDashboard user={user} jobs={stats.myJobs} applications={stats.applications} onUpdateStatus={handleUpdateAppStatus} />
         </div>
       </div>
     );
@@ -964,7 +1278,7 @@ const DashboardPage = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ClientDashboard user={user} projects={stats.myProjects} />
+          <ClientDashboard user={user} projects={stats.myProjects} proposals={stats.incomingProposals} onUpdateStatus={handleUpdatePropStatus} />
         </div>
       </div>
     );
@@ -982,13 +1296,13 @@ const DashboardPage = () => {
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   if (!user) return <Navigate to="/auth" />;
   return children;
 };
 
 // ==========================================
-// 15. MAIN APP
+// 16. MAIN APP
 // ==========================================
 function App() {
   return (
@@ -1004,6 +1318,7 @@ function App() {
             <Route path="/jobs/:id" element={<JobDetailPage />} />
             <Route path="/jobs/post" element={<ProtectedRoute><PostJobPage /></ProtectedRoute>} />
             <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/projects/:id" element={<ProjectDetailPage />} />
             <Route path="/projects/post" element={<ProtectedRoute><PostProjectPage /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           </Routes>

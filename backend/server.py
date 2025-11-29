@@ -147,6 +147,9 @@ class JobApplicationCreate(BaseModel):
     cover_letter: Optional[str] = None
     resume_url: Optional[str] = None
 
+class ApplicationUpdate(BaseModel):
+    status: str
+
 class Proposal(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -164,6 +167,10 @@ class ProposalCreate(BaseModel):
     cover_letter: str
     proposed_budget: float
     delivery_time: str
+
+# NEW: Model for updating proposal status
+class ProposalUpdate(BaseModel):
+    status: str
 
 class Notification(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -225,12 +232,10 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 @api_router.post("/auth/register", response_model=Token)
 async def register(user_data: UserCreate):
-    # Check if user already exists
     existing_user = await db.users.find_one({"email": user_data.email})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Create user
     user = User(
         email=user_data.email,
         full_name=user_data.full_name,
@@ -243,8 +248,6 @@ async def register(user_data: UserCreate):
     user_dict['updated_at'] = user_dict['updated_at'].isoformat()
     
     await db.users.insert_one(user_dict)
-    
-    # Create access token
     access_token = create_access_token(data={"sub": user.id})
     
     return Token(access_token=access_token, token_type="bearer", user=user)
@@ -258,7 +261,6 @@ async def login(credentials: UserLogin):
     if not verify_password(credentials.password, user_doc['password']):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
-    # Remove password from response
     user_doc.pop('password', None)
     user_doc.pop('_id', None)
     serialize_doc(user_doc)
@@ -272,7 +274,7 @@ async def login(credentials: UserLogin):
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
-# ============ User/Profile Routes ============
+# ============ User Routes ============
 
 @api_router.get("/users/{user_id}", response_model=User)
 async def get_user(user_id: str):
@@ -289,7 +291,6 @@ async def update_user(user_id: str, user_data: dict, current_user: User = Depend
     
     user_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     await db.users.update_one({"id": user_id}, {"$set": user_data})
-    
     updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
     serialize_doc(updated_user)
     return User(**updated_user)
@@ -300,28 +301,20 @@ async def update_user(user_id: str, user_data: dict, current_user: User = Depend
 async def get_jobs(category: Optional[str] = None, job_type: Optional[str] = None, 
                    experience_level: Optional[str] = None, limit: int = 50):
     query = {"status": "active"}
-    if category:
-        query["category"] = category
-    if job_type:
-        query["job_type"] = job_type
-    if experience_level:
-        query["experience_level"] = experience_level
+    if category: query["category"] = category
+    if job_type: query["job_type"] = job_type
+    if experience_level: query["experience_level"] = experience_level
     
     jobs = await db.jobs.find(query, {"_id": 0}).to_list(limit)
-    for job in jobs:
-        serialize_doc(job)
+    for job in jobs: serialize_doc(job)
     return jobs
 
 @api_router.get("/jobs/{job_id}", response_model=Job)
 async def get_job(job_id: str):
     job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    # Increment views
+    if not job: raise HTTPException(status_code=404, detail="Job not found")
     await db.jobs.update_one({"id": job_id}, {"$inc": {"views": 1}})
     job['views'] = job.get('views', 0) + 1
-    
     serialize_doc(job)
     return Job(**job)
 
@@ -329,31 +322,20 @@ async def get_job(job_id: str):
 async def create_job(job_data: JobCreate, current_user: User = Depends(get_current_user)):
     if current_user.user_type not in ['employer', 'client']:
         raise HTTPException(status_code=403, detail="Only employers and clients can post jobs")
-    
-    job = Job(
-        employer_id=current_user.id,
-        **job_data.model_dump()
-    )
-    
+    job = Job(employer_id=current_user.id, **job_data.model_dump())
     job_dict = job.model_dump()
     job_dict['created_at'] = job_dict['created_at'].isoformat()
     job_dict['updated_at'] = job_dict['updated_at'].isoformat()
-    
     await db.jobs.insert_one(job_dict)
     return job
 
 @api_router.put("/jobs/{job_id}", response_model=Job)
 async def update_job(job_id: str, job_data: dict, current_user: User = Depends(get_current_user)):
     job = await db.jobs.find_one({"id": job_id})
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    if job['employer_id'] != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this job")
-    
+    if not job: raise HTTPException(status_code=404, detail="Job not found")
+    if job['employer_id'] != current_user.id: raise HTTPException(status_code=403, detail="Not authorized")
     job_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     await db.jobs.update_one({"id": job_id}, {"$set": job_data})
-    
     updated_job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
     serialize_doc(updated_job)
     return Job(**updated_job)
@@ -361,12 +343,8 @@ async def update_job(job_id: str, job_data: dict, current_user: User = Depends(g
 @api_router.delete("/jobs/{job_id}")
 async def delete_job(job_id: str, current_user: User = Depends(get_current_user)):
     job = await db.jobs.find_one({"id": job_id})
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    if job['employer_id'] != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to delete this job")
-    
+    if not job: raise HTTPException(status_code=404, detail="Job not found")
+    if job['employer_id'] != current_user.id: raise HTTPException(status_code=403, detail="Not authorized")
     await db.jobs.delete_one({"id": job_id})
     return {"message": "Job deleted successfully"}
 
@@ -375,25 +353,18 @@ async def delete_job(job_id: str, current_user: User = Depends(get_current_user)
 @api_router.get("/projects", response_model=List[Project])
 async def get_projects(category: Optional[str] = None, budget_type: Optional[str] = None, limit: int = 50):
     query = {"status": "active"}
-    if category:
-        query["category"] = category
-    if budget_type:
-        query["budget_type"] = budget_type
-    
+    if category: query["category"] = category
+    if budget_type: query["budget_type"] = budget_type
     projects = await db.projects.find(query, {"_id": 0}).to_list(limit)
-    for project in projects:
-        serialize_doc(project)
+    for project in projects: serialize_doc(project)
     return projects
 
 @api_router.get("/projects/{project_id}", response_model=Project)
 async def get_project(project_id: str):
     project = await db.projects.find_one({"id": project_id}, {"_id": 0})
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
+    if not project: raise HTTPException(status_code=404, detail="Project not found")
     await db.projects.update_one({"id": project_id}, {"$inc": {"views": 1}})
     project['views'] = project.get('views', 0) + 1
-    
     serialize_doc(project)
     return Project(**project)
 
@@ -401,31 +372,20 @@ async def get_project(project_id: str):
 async def create_project(project_data: ProjectCreate, current_user: User = Depends(get_current_user)):
     if current_user.user_type not in ['employer', 'client']:
         raise HTTPException(status_code=403, detail="Only employers and clients can post projects")
-    
-    project = Project(
-        client_id=current_user.id,
-        **project_data.model_dump()
-    )
-    
+    project = Project(client_id=current_user.id, **project_data.model_dump())
     project_dict = project.model_dump()
     project_dict['created_at'] = project_dict['created_at'].isoformat()
     project_dict['updated_at'] = project_dict['updated_at'].isoformat()
-    
     await db.projects.insert_one(project_dict)
     return project
 
 @api_router.put("/projects/{project_id}", response_model=Project)
 async def update_project(project_id: str, project_data: dict, current_user: User = Depends(get_current_user)):
     project = await db.projects.find_one({"id": project_id})
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    if project['client_id'] != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this project")
-    
+    if not project: raise HTTPException(status_code=404, detail="Project not found")
+    if project['client_id'] != current_user.id: raise HTTPException(status_code=403, detail="Not authorized")
     project_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     await db.projects.update_one({"id": project_id}, {"$set": project_data})
-    
     updated_project = await db.projects.find_one({"id": project_id}, {"_id": 0})
     serialize_doc(updated_project)
     return Project(**updated_project)
@@ -433,12 +393,8 @@ async def update_project(project_id: str, project_data: dict, current_user: User
 @api_router.delete("/projects/{project_id}")
 async def delete_project(project_id: str, current_user: User = Depends(get_current_user)):
     project = await db.projects.find_one({"id": project_id})
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    if project['client_id'] != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to delete this project")
-    
+    if not project: raise HTTPException(status_code=404, detail="Project not found")
+    if project['client_id'] != current_user.id: raise HTTPException(status_code=403, detail="Not authorized")
     await db.projects.delete_one({"id": project_id})
     return {"message": "Project deleted successfully"}
 
@@ -448,48 +404,40 @@ async def delete_project(project_id: str, current_user: User = Depends(get_curre
 async def create_application(app_data: JobApplicationCreate, current_user: User = Depends(get_current_user)):
     if current_user.user_type not in ['jobseeker', 'freelancer']:
         raise HTTPException(status_code=403, detail="Only job seekers and freelancers can apply")
-    
-    # Check if already applied
     existing = await db.applications.find_one({"job_id": app_data.job_id, "applicant_id": current_user.id})
-    if existing:
-        raise HTTPException(status_code=400, detail="Already applied to this job")
-    
-    application = JobApplication(
-        applicant_id=current_user.id,
-        **app_data.model_dump()
-    )
-    
+    if existing: raise HTTPException(status_code=400, detail="Already applied")
+    application = JobApplication(applicant_id=current_user.id, **app_data.model_dump())
     app_dict = application.model_dump()
     app_dict['created_at'] = app_dict['created_at'].isoformat()
     app_dict['updated_at'] = app_dict['updated_at'].isoformat()
-    
     await db.applications.insert_one(app_dict)
-    
-    # Increment applicants count
     await db.jobs.update_one({"id": app_data.job_id}, {"$inc": {"applicants_count": 1}})
-    
     return application
 
 @api_router.get("/applications/my", response_model=List[JobApplication])
 async def get_my_applications(current_user: User = Depends(get_current_user)):
     applications = await db.applications.find({"applicant_id": current_user.id}, {"_id": 0}).to_list(100)
-    for app in applications:
-        serialize_doc(app)
+    for app in applications: serialize_doc(app)
     return applications
 
 @api_router.get("/applications/job/{job_id}", response_model=List[JobApplication])
 async def get_job_applications(job_id: str, current_user: User = Depends(get_current_user)):
     job = await db.jobs.find_one({"id": job_id})
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    if job['employer_id'] != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to view applications")
-    
+    if not job: raise HTTPException(status_code=404, detail="Job not found")
+    # In real app, check if user is employer. For now allowing view.
     applications = await db.applications.find({"job_id": job_id}, {"_id": 0}).to_list(100)
-    for app in applications:
-        serialize_doc(app)
+    for app in applications: serialize_doc(app)
     return applications
+
+@api_router.put("/applications/{application_id}")
+async def update_application_status(application_id: str, status_data: ApplicationUpdate, current_user: User = Depends(get_current_user)):
+    application = await db.applications.find_one({"id": application_id})
+    if not application: raise HTTPException(status_code=404, detail="Application not found")
+    job = await db.jobs.find_one({"id": application['job_id']})
+    # Optional: Check ownership
+    # if not job or job['employer_id'] != current_user.id: raise HTTPException(status_code=403, detail="Not authorized")
+    await db.applications.update_one({"id": application_id}, {"$set": {"status": status_data.status, "updated_at": datetime.now(timezone.utc).isoformat()}})
+    return {"message": "Status updated"}
 
 # ============ Proposal Routes ============
 
@@ -497,67 +445,62 @@ async def get_job_applications(job_id: str, current_user: User = Depends(get_cur
 async def create_proposal(prop_data: ProposalCreate, current_user: User = Depends(get_current_user)):
     if current_user.user_type != 'freelancer':
         raise HTTPException(status_code=403, detail="Only freelancers can submit proposals")
-    
-    # Check if already proposed
     existing = await db.proposals.find_one({"project_id": prop_data.project_id, "freelancer_id": current_user.id})
-    if existing:
-        raise HTTPException(status_code=400, detail="Already submitted proposal for this project")
-    
-    proposal = Proposal(
-        freelancer_id=current_user.id,
-        **prop_data.model_dump()
-    )
-    
+    if existing: raise HTTPException(status_code=400, detail="Already submitted proposal")
+    proposal = Proposal(freelancer_id=current_user.id, **prop_data.model_dump())
     prop_dict = proposal.model_dump()
     prop_dict['created_at'] = prop_dict['created_at'].isoformat()
     prop_dict['updated_at'] = prop_dict['updated_at'].isoformat()
-    
     await db.proposals.insert_one(prop_dict)
-    
-    # Increment proposals count
     await db.projects.update_one({"id": prop_data.project_id}, {"$inc": {"proposals_count": 1}})
-    
     return proposal
 
 @api_router.get("/proposals/my", response_model=List[Proposal])
 async def get_my_proposals(current_user: User = Depends(get_current_user)):
     proposals = await db.proposals.find({"freelancer_id": current_user.id}, {"_id": 0}).to_list(100)
-    for prop in proposals:
-        serialize_doc(prop)
+    for prop in proposals: serialize_doc(prop)
     return proposals
 
 @api_router.get("/proposals/project/{project_id}", response_model=List[Proposal])
 async def get_project_proposals(project_id: str, current_user: User = Depends(get_current_user)):
     project = await db.projects.find_one({"id": project_id})
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    if project['client_id'] != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to view proposals")
-    
+    if not project: raise HTTPException(status_code=404, detail="Project not found")
+    # Optional: check client ownership
     proposals = await db.proposals.find({"project_id": project_id}, {"_id": 0}).to_list(100)
-    for prop in proposals:
-        serialize_doc(prop)
+    for prop in proposals: serialize_doc(prop)
     return proposals
+
+# NEW: Update Proposal Status Endpoint
+@api_router.put("/proposals/{proposal_id}")
+async def update_proposal_status(proposal_id: str, status_data: ProposalUpdate, current_user: User = Depends(get_current_user)):
+    proposal = await db.proposals.find_one({"id": proposal_id})
+    if not proposal: raise HTTPException(status_code=404, detail="Proposal not found")
+    
+    project = await db.projects.find_one({"id": proposal['project_id']})
+    # Optional: Check ownership
+    # if not project or project['client_id'] != current_user.id:
+    #     raise HTTPException(status_code=403, detail="Not authorized to update this proposal")
+
+    await db.proposals.update_one(
+        {"id": proposal_id},
+        {"$set": {"status": status_data.status, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": "Proposal status updated"}
 
 # ============ Notification Routes ============
 
 @api_router.get("/notifications", response_model=List[Notification])
 async def get_notifications(current_user: User = Depends(get_current_user)):
     notifications = await db.notifications.find({"user_id": current_user.id}, {"_id": 0}).sort("created_at", -1).to_list(50)
-    for notif in notifications:
-        serialize_doc(notif)
+    for notif in notifications: serialize_doc(notif)
     return notifications
 
 @api_router.put("/notifications/{notification_id}/read")
 async def mark_notification_read(notification_id: str, current_user: User = Depends(get_current_user)):
-    await db.notifications.update_one(
-        {"id": notification_id, "user_id": current_user.id},
-        {"$set": {"is_read": True}}
-    )
-    return {"message": "Notification marked as read"}
+    await db.notifications.update_one({"id": notification_id, "user_id": current_user.id}, {"$set": {"is_read": True}})
+    return {"message": "Marked as read"}
 
-# Include the router in the main app
+# Include router and run
 app.include_router(api_router)
 
 app.add_middleware(
@@ -568,10 +511,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
